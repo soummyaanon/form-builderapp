@@ -38,44 +38,54 @@ const SortableQuestion = ({ question, formId, onDelete }: SortableQuestionProps)
     setNodeRef,
     transform,
     transition,
-  } = useSortable({ id: question.id });
+    isDragging
+  } = useSortable({ 
+    id: question.id,
+    transition: {
+      duration: 150,
+      easing: 'ease'
+    }
+  });
 
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
+    zIndex: isDragging ? 1 : 0,
+    opacity: isDragging ? 0.9 : 1,
   };
 
   return (
     <div
       ref={setNodeRef}
       style={style}
-      className="group relative"
+      className={`group relative bg-white border rounded-lg 
+                ${isDragging ? 'shadow-lg' : 'hover:border-gray-300'} 
+                transition-colors duration-150`}
     >
-      <div
-        {...attributes}
-        {...listeners}
-        className="absolute left-3 top-3 p-1.5 cursor-grab 
-                 text-gray-400 opacity-0 group-hover:opacity-100 
-                 hover:text-gray-600 transition-all duration-200"
-      >
-        <Bars3Icon className="w-4 h-4" />
+      <div className="flex items-center justify-between p-3 border-b bg-gray-50">
+        <div
+          {...attributes}
+          {...listeners}
+          className="p-1.5 cursor-grab text-gray-500 hover:text-gray-700 transition-all duration-200"
+        >
+          <Bars3Icon className="w-4 h-4" />
+        </div>
+        
+        <button
+          onClick={() => onDelete(question.id)}
+          className="p-1.5 rounded-md text-gray-500 hover:bg-red-50 hover:text-red-500 transition-all duration-200"
+          title="Delete question"
+        >
+          <TrashIcon className="w-4 h-4" />
+        </button>
       </div>
       
-      <QuestionField
-        question={question}
-        formId={formId}
-      />
-      
-      <button
-        onClick={() => onDelete(question.id)}
-        className="absolute right-3 top-3 p-1.5 rounded-md 
-                 text-gray-400 opacity-0 group-hover:opacity-100 
-                 hover:bg-red-50 hover:text-red-500 
-                 transition-all duration-200"
-        title="Delete question"
-      >
-        <TrashIcon className="w-4 h-4" />
-      </button>
+      <div className="p-4">
+        <QuestionField
+          question={question}
+          formId={formId}
+        />
+      </div>
     </div>
   );
 };
@@ -131,7 +141,11 @@ export function FormBuilder() {
   };
 
   const sensors = useSensors(
-    useSensor(PointerSensor),
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 5, // Reduce activation distance for quicker drag start
+      }
+    }),
     useSensor(KeyboardSensor, {
       coordinateGetter: sortableKeyboardCoordinates,
     })
@@ -204,6 +218,7 @@ export function FormBuilder() {
             sensors={sensors}
             collisionDetection={closestCenter}
             onDragEnd={handleDragEnd}
+            modifiers={[]}  // Remove any modifiers for faster movement
           >
             <SortableContext
               items={currentForm.questions}
