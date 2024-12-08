@@ -4,7 +4,81 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import Link from 'next/link';
 import { QuestionField } from './QuestionField';
-import { EyeIcon, ShareIcon, GlobeAltIcon } from '@heroicons/react/24/outline';
+import { EyeIcon, ShareIcon, GlobeAltIcon, TrashIcon, Bars3Icon } from '@heroicons/react/24/outline';
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+  useSortable,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import { Question } from '@/types/form';
+
+interface SortableQuestionProps {
+  question: Question;
+  formId: string;
+  onDelete: (id: string) => void;
+}
+
+// Sortable Question Component
+const SortableQuestion = ({ question, formId, onDelete }: SortableQuestionProps) => {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+  } = useSortable({ id: question.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className="group relative"
+    >
+      <div
+        {...attributes}
+        {...listeners}
+        className="absolute left-3 top-3 p-1.5 cursor-grab 
+                 text-gray-400 opacity-0 group-hover:opacity-100 
+                 hover:text-gray-600 transition-all duration-200"
+      >
+        <Bars3Icon className="w-4 h-4" />
+      </div>
+      
+      <QuestionField
+        question={question}
+        formId={formId}
+      />
+      
+      <button
+        onClick={() => onDelete(question.id)}
+        className="absolute right-3 top-3 p-1.5 rounded-md 
+                 text-gray-400 opacity-0 group-hover:opacity-100 
+                 hover:bg-red-50 hover:text-red-500 
+                 transition-all duration-200"
+        title="Delete question"
+      >
+        <TrashIcon className="w-4 h-4" />
+      </button>
+    </div>
+  );
+};
 
 export function FormBuilder() {
   const [title, setTitle] = useState('');
@@ -49,6 +123,34 @@ export function FormBuilder() {
     const shareUrl = `${window.location.origin}/submit/${currentForm.id}`;
     navigator.clipboard.writeText(shareUrl);
     // You could add a toast notification here
+  };
+
+  const handleDeleteQuestion = (questionId: string) => {
+    if (!currentForm) return;
+    useFormStore.getState().deleteQuestion(currentForm.id, questionId);
+  };
+
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    
+    if (!currentForm || !over || active.id === over.id) return;
+
+    const oldIndex = currentForm.questions.findIndex(q => q.id === active.id);
+    const newIndex = currentForm.questions.findIndex(q => q.id === over.id);
+
+    const newQuestions = arrayMove(currentForm.questions, oldIndex, newIndex);
+    
+    useFormStore.getState().updateForm(currentForm.id, {
+      questions: newQuestions,
+      updatedAt: new Date()
+    });
   };
 
   return (
@@ -98,15 +200,27 @@ export function FormBuilder() {
             </div>
           </div>
 
-          <div className="space-y-4">
-            {currentForm.questions.map((question) => (
-              <QuestionField
-                key={question.id}
-                question={question}
-                formId={currentForm.id}
-              />
-            ))}
-          </div>
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragEnd={handleDragEnd}
+          >
+            <SortableContext
+              items={currentForm.questions}
+              strategy={verticalListSortingStrategy}
+            >
+              <div className="space-y-4">
+                {currentForm.questions.map((question) => (
+                  <SortableQuestion
+                    key={question.id}
+                    question={question}
+                    formId={currentForm.id}
+                    onDelete={handleDeleteQuestion}
+                  />
+                ))}
+              </div>
+            </SortableContext>
+          </DndContext>
 
           <Button
             variant="outline"
